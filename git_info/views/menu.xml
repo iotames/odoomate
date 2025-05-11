@@ -1,0 +1,12 @@
+<odoo>
+
+<data>
+    <!-- 菜单配置 -->
+    <!-- 顶级菜单（显示在应用列表） -->
+    <menuitem id="menu_git_root" name="版本信息" sequence="999" groups="base.group_user" />
+    <menuitem id="menu_git_info" name="Git版本" parent="menu_git_root" action="action_git_info" />
+    <!-- 子菜单（关联配置动作） -->
+    <menuitem id="menu_git_config" name="Git设置" parent="menu_git_root" action="git_info_config_action" sequence="99" groups="base.group_system"/>
+</data>
+
+</odoo>

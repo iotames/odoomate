@@ -1,0 +1,39 @@
+<odoo>
+    <!-- 树状视图 -->
+    <record id="view_git_info_tree" model="ir.ui.view">
+        <field name="name">stc.git.info.tree</field>
+        <field name="model">stc.git.info</field>
+        <field name="arch" type="xml">
+            <tree default_order="commit_date desc">
+                <header>
+                    <button name="refresh_git_info" type="object" string="刷新" class="oe_highlight" display="always"/>
+                </header>
+                <field name="release_tag" string="Version"/>
+                <field name="branch_name"/>
+                <field name="commit_date"/>
+                <field name="commit_message"/>
+                <field name="commit_hash"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- 窗口动作 -->
+    <record id="action_git_info" model="ir.actions.act_window">
+        <field name="name">版本信息</field>
+        <field name="res_model">stc.git.info</field>
+        <field name="view_mode">tree,form</field>
+        <!-- <field name="binding_model_id" ref="model_stc_git_info"/>
+        <field name="binding_view_types">tree,form</field> -->
+    </record>
+
+    <!-- 服务器动作按钮 -->
+    <record id="action_refresh_git_info" model="ir.actions.server">
+        <field name="name">刷新Git信息</field>
+        <field name="model_id" ref="model_stc_git_info"/>
+        <field name="binding_model_id" ref="model_stc_git_info"/>
+        <field name="binding_view_types">list,form</field>
+        <field name="binding_type">action</field>
+        <field name="state">code</field>
+        <field name="code">action = model.refresh_git_info()</field>
+    </record>
+</odoo>
