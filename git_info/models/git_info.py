@@ -58,10 +58,7 @@ class StcGitInfo(models.Model):
             author_line = next(line for line in commit_data.split('\n') if line.startswith('author'))
             parts = author_line.split(' ')
             date_str = parts[-2]  # 时间戳
-            timezone = self.env['ir.config_parameter'].sudo().get_param('git_info.timezone')
-            # 如果timezone为None或False，设置默认值为'+0800'
-            if not timezone:
-                timezone = '+0800'
+            timezone = self._get_timezone()
             if timezone == '':
                 timezone = parts[-1]  # 时区偏移，如 +0800
             print("------timezone-----------:", timezone)
@@ -74,33 +71,40 @@ class StcGitInfo(models.Model):
                 tz_sign = -1 if timezone.startswith('-') else 1
                 tz_hours = int(timezone[1:3])
                 tz_minutes = int(timezone[3:5])  # 注意这里是 3:5，不是 3:
-                # tz_offset = (tz_hours * 3600 + tz_minutes * 60) * (-1 if timezone[0] == '-' else 1)
-                # # 应用时区偏移到时间戳
-                # adjusted_timestamp = timestamp + tz_offset
-                # dt = datetime.datetime.fromtimestamp(adjusted_timestamp)
-                # formatted_date = fields.Datetime.to_string(
-                #     fields.Datetime.context_timestamp(self, dt))
-                
+
                 tz_offset = tz_sign * (tz_hours * 3600 + tz_minutes * 60)
-                # 将时间戳转换为 UTC 时间的 datetime 对象
-                utc_dt = datetime.datetime.utcfromtimestamp(timestamp)
-                # 根据时区偏移计算本地时间
-                local_dt = utc_dt + datetime.timedelta(seconds=tz_offset)
-                # 转换为 Odoo 上下文时区（注意括号闭合）
-                formatted_date = fields.Datetime.to_string(
-                    fields.Datetime.context_timestamp(self, local_dt)
-                )
+                print("------tz_sign({})---tz_hours({})---tz_minutes({})--tz_offset({})---".format(tz_sign, tz_hours, tz_minutes, tz_offset))
+                try:
+                    # 确保时间戳在合理范围内
+                    if timestamp < 0 or timestamp > 2147483647:  # 2147483647 是 Unix 时间戳上限
+                        _logger.warning("无法将 %s 解析为时间戳，使用当前时间", date_str)
+                        raise UserError(_("{}超过unix时间戳范围0~2147483647".format(date_str)))  
+                    # 创建时区对象
+                    from datetime import timezone, timedelta
+                    tz = timezone(timedelta(seconds=tz_offset))
+                    
+                    # 创建带有时区的datetime对象
+                    local_dt = datetime.datetime.fromtimestamp(timestamp, tz)                    
+                    # 转换为 Odoo 上下文时区
+                    # formatted_date = fields.Datetime.to_string(
+                    #     fields.Datetime.context_timestamp(self, local_dt)
+                    # )
+                except (ValueError, OverflowError) as e:
+                    _logger.warning("无法将 %s 解析为有效时间戳，错误：%s，使用当前时间", timestamp, str(e))
+                    raise UserError(_("解析时间戳错误"))
+                print("-----local_dt({})----".format(local_dt))
             except ValueError:
                 # 如果不是时间戳，则使用安全的方式处理日期字符串
                 _logger.warning("无法将 %s 解析为时间戳，使用当前时间", date_str)
-                formatted_date = fields.Datetime.to_string(
-                    fields.Datetime.context_timestamp(self, fields.Datetime.now()))
-                
+                raise UserError(_("解析时间戳错误"))
+                # formatted_date = fields.Datetime.to_string(
+                #     fields.Datetime.context_timestamp(self, fields.Datetime.now()))
             return {
                 'hash': commit_hash,
                 'message': message,
                 'data': commit_data,
-                'date': formatted_date,
+                'date': fields.Datetime.to_string(local_dt),
+                # 'date': formatted_date,
                 'branch': branch
             }
         except FileNotFoundError:
