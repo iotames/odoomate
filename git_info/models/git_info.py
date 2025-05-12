@@ -16,6 +16,12 @@ class StcGitInfo(models.Model):
     branch_name = fields.Char('Branch')
     release_tag = fields.Char('Release Tag')
 
+    def _get_git_dir(self):
+        return self.env['ir.config_parameter'].sudo().get_param('git_info.git_dir', default='/mnt/extra-addons/.git')
+
+    def _get_timezone(self):
+        return self.env['ir.config_parameter'].sudo().get_param('git_info.timezone', default='+0800')
+
     def _parse_git_object(self, git_dir, obj_hash):
         """解析Git对象文件"""
         _logger.info("-----_parse_git_object---commit_hash(%s)", obj_hash)
@@ -152,7 +158,4 @@ class StcGitInfo(models.Model):
     # records = env.search([('field', '=', value)])  # 查询记录
     # self.env['stc.git.info'].debug()
     def debug(self):
-        print("Hello, World!")
-        # 尝试获取git目录配置,如果不存在则创建默认值
-        git_dir = self.env['ir.config_parameter'].sudo().get_param('git_info.git_dir')
-        print("Oh debug---fadf", git_dir)
+        print("Hello git_dir={}, timezone={}".format(self._get_git_dir(), self._get_timezone()))

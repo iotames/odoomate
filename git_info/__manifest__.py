@@ -16,17 +16,16 @@ Long description of module's purpose
     # Check https://github.com/odoo/odoo/blob/15.0/odoo/addons/base/data/ir_module_category_data.xml
     # for the full list
     'category': 'Odoomate/System',
-    'version': '17.0.0.3.1',
+    'version': '17.0.0.5.0',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'base_setup'],
+    'depends': ['base'],
 
     # always loaded
     # 顺序：安全，数据，试图，菜单
     'data': [
         'security/ir.model.access.csv',
         'data/cron.xml',
-        'views/config.xml',
         'views/git_info_views.xml',
         'views/menu.xml',
         # 'views/views.xml',

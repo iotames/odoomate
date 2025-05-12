@@ -1,3 +1,2 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_stc_git_info,stc.git.info,model_stc_git_info,base.group_user,1,1,1,1
-access_git_info_config,git.info.config,model_git_info_config,base.group_user,1,1,1,1
