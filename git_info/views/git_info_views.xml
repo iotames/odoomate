@@ -8,11 +8,12 @@
                 <header>
                     <button name="refresh_git_info" type="object" string="刷新" class="oe_highlight" display="always"/>
                 </header>
-                <field name="release_tag" string="Version"/>
-                <field name="branch_name"/>
                 <field name="commit_date"/>
-                <field name="commit_message"/>
-                <field name="commit_hash"/>
+                <field name="release_tag" string="Version"/>
+                <field name="commit_desc"/>
+                <field name="branch_name"/>
+                <field name="commit_title"/>
+                <field name="commit_hash" />
             </tree>
         </field>
     </record>
