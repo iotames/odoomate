@@ -1,5 +1,6 @@
 import os
 import zlib
+import re
 from datetime import timezone, timedelta, datetime
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
@@ -14,7 +15,7 @@ class StcGitInfo(models.Model):
     commit_title = fields.Text('Commit Title', compute='_compute_commit_title')
     commit_data = fields.Text('Commit Data')
     # commit_date = fields.Datetime('Date')
-    commit_date = fields.Datetime('Date', compute='_compute_commit_date')
+    commit_date = fields.Datetime('Date', compute='_compute_commit_date', store=True)
     commit_desc = fields.Text('Description', compute='_compute_commit_desc')
     branch_name = fields.Char('Branch')
     release_tag = fields.Char('Release Tag')
@@ -101,17 +102,90 @@ class StcGitInfo(models.Model):
         # 创建时区对象
         return timezone(timedelta(seconds=tz_offset))
 
+    # def _parse_git_object(self, git_dir, obj_hash):
+    #     """解析Git对象文件"""
+    #     
+    #     try:
+    #         obj_path = os.path.join(git_dir, 'objects', obj_hash[:2], obj_hash[2:])
+    #         with open(obj_path, 'rb') as f:
+    #             raw_data = zlib.decompress(f.read())
+    #             return raw_data.split(b'\x00', 1)[1].decode('utf-8', 'ignore')
+    #     except Exception as e:
+    #         raise UserError(_("Git解析错误: %s") % str(e))
+
     def _parse_git_object(self, git_dir, obj_hash):
-        """解析Git对象文件"""
+        """解析Git对象文件（支持松散对象、packed objects、多编码）"""
+        # pip install gitdb, chardet
         _logger.info("-----_parse_git_object---commit_hash(%s)", obj_hash)
+
+        # ------------------------------
+        # 1. 哈希合法性校验（独立功能）
+        # ------------------------------
+        self._validate_git_hash(obj_hash)
+
         try:
+            # ------------------------------
+            # 2. 获取原始数据（支持 packed objects）
+            # ------------------------------
+            raw_data = None
             obj_path = os.path.join(git_dir, 'objects', obj_hash[:2], obj_hash[2:])
-            with open(obj_path, 'rb') as f:
-                raw_data = zlib.decompress(f.read())
-                return raw_data.split(b'\x00', 1)[1].decode('utf-8', 'ignore')
+            
+            # 优先尝试松散对象
+            if os.path.exists(obj_path):
+                with open(obj_path, 'rb') as f:
+                    raw_data = zlib.decompress(f.read())
+            else:
+                # 使用 gitdb 解析 pack 文件
+                _logger.warning(_("------_parse_git_object--(pip install gitdb)---from gitdb import GitDB---"))
+                try:
+                    from gitdb import GitDB  # 延迟导入避免依赖问题
+                except ImportError:
+                    raise UserError(_("解析 Packed Objects 需要安装 gitdb 库：pip install gitdb"))
+                obj_db = GitDB(os.path.join(git_dir, 'objects'))
+                raw_data = obj_db.stream(obj_hash.encode()).read()
+
+            # ------------------------------
+            # 3. 解码数据（支持多编码）
+            # ------------------------------
+            # 提取内容部分（跳过对象头）
+            content = raw_data.split(b'\x00', 1)[1]
+            
+            # 尝试 UTF-8 解码
+            try:
+                return content.decode('utf-8')
+            except UnicodeDecodeError:
+                # 自动检测编码（如 GBK、ISO-8859-1）
+                _logger.warning(_("------_parse_git_object---(pip install chardet)---import chardet---"))
+                try:
+                    import chardet
+                except ImportError:
+                    raise UserError(_("检测非 UTF-8 编码需要安装 chardet 库：pip install chardet"))
+                detected = chardet.detect(content)
+                return content.decode(detected['encoding'] or 'latin-1', 'replace')
+
         except Exception as e:
+            _logger.error("解析对象失败，哈希: %s，错误: %s", obj_hash, str(e))
             raise UserError(_("Git解析错误: %s") % str(e))
-    
+
+    def _validate_git_hash(self, hash):
+        if not re.match(r'^[0-9a-fA-F]{40}$', hash):
+            raise UserError(_("无效的 Git 哈希值: %s") % hash)
+
+    # 新增辅助方法：解析 packed-refs
+    def _get_packed_ref(self, git_dir, target_ref):
+        packed_refs_path = os.path.join(git_dir, 'packed-refs')
+        if not os.path.exists(packed_refs_path):
+            return None
+        
+        with open(packed_refs_path, 'r') as pf:
+            for line in pf:
+                line = line.strip()
+                if line.startswith('#') or not line:
+                    continue  # 跳过注释和空行
+                if line.endswith(f' {target_ref}'):
+                    return line.split()[0]
+        return None
+
     def _get_head_info(self, git_dir):
         """获取HEAD指向的提交哈希值和分支"""
         self._check_git_dir(git_dir)
@@ -123,8 +197,15 @@ class StcGitInfo(models.Model):
             if ref.startswith('ref: '):
                 branch_path = ref[5:]
                 ref_path = os.path.join(git_dir, branch_path)
-                with open(ref_path, 'r') as f:
-                    commit_hash = f.read().strip()
+                # 优先尝试正常 ref 文件
+                if os.path.exists(ref_path):
+                    with open(ref_path, 'r') as f:
+                        commit_hash = f.read().strip()
+                else:
+                    # 如果找不到正常的 ref 文件，尝试解析 packed-refs
+                    commit_hash = self._get_packed_ref(git_dir, branch_path)
+                    if not commit_hash:
+                        raise UserError(f"Ref {branch_path} 不存在于 packed-refs")
                 branch = branch_path.split('/')[-1]
             else:
                 commit_hash = ref
