@@ -4,7 +4,7 @@
         <field name="name">stc.git.info.tree</field>
         <field name="model">stc.git.info</field>
         <field name="arch" type="xml">
-            <tree default_order="commit_date desc">
+            <tree default_order="commit_date desc" create="false">
                 <header>
                     <button name="refresh_git_info" type="object" string="刷新" class="oe_highlight" display="always"/>
                 </header>

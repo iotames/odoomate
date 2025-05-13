@@ -65,6 +65,14 @@ class StcGitInfo(models.Model):
     def _get_git_dir(self):
         return self.env['ir.config_parameter'].sudo().get_param('git_info.git_dir', default='/mnt/extra-addons/.git')
     
+    def _check_git_dir(self, git_dir):
+        if not isinstance(git_dir, str):
+            raise UserError(_("git_dir 必须是字符串类型"))
+        if not os.path.exists(git_dir):
+            err_msg = f"Git目录 {git_dir} 不存在。请新建或修改配置：设置-技术-参数-系统参数: git_info.git_dir"
+            _logger.warning(_(err_msg))
+            raise UserError(err_msg)
+
     def _get_time_info_from_commit_data(self, commit_data):
         # 提取时间戳和时区信息
         author_line = next(line for line in commit_data.split('\n') if line.startswith('author'))
@@ -106,6 +114,7 @@ class StcGitInfo(models.Model):
     
     def _get_head_info(self, git_dir):
         """获取HEAD指向的提交哈希值和分支"""
+        self._check_git_dir(git_dir)
         try:
             # 解析HEAD文件
             head_path = os.path.join(git_dir, 'HEAD')
@@ -124,8 +133,8 @@ class StcGitInfo(models.Model):
                 'hash': commit_hash,
                 'branch': branch
             }
-        except FileNotFoundError:
-            raise UserError(_("未找到Git仓库配置"))
+        except Exception as e:
+            raise UserError(_("获取Git仓库的HEAD信息错误: %s") % str(e))
     
     def _get_latest_commit_data(self, git_dir, commit_hash):
         """获取最新提交数据"""
@@ -180,15 +189,8 @@ class StcGitInfo(models.Model):
 
     def refresh_git_info(self):
         """刷新版本信息"""
-        git_dir = self.env['ir.config_parameter'].sudo().get_param('git_info.git_dir')
-        # 如果git_dir为False或None，设置默认值
-        if not git_dir:
-            git_dir = "/mnt/extra-addons/.git"
-        if not isinstance(git_dir, str):
-            raise UserError(_("git_dir 必须是字符串类型"))
-        if not os.path.exists(git_dir):
-            _logger.warning(_("Git目录 %s 不存在"), git_dir)
-            raise UserError(_("Git目录 %s 不存在") % git_dir)
+        git_dir = self._get_git_dir()
+        self._check_git_dir(git_dir)
         _logger.info("-----refresh_git_info--找到--Git目录: %s", git_dir)
         # self.search([]).unlink()  # 清理旧记录
         info = self._get_head_info(git_dir)
